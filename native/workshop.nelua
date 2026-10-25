@@ -1,0 +1,116 @@
+require 'native.lua'
+local math = require 'math'
+## cinclude '<stdlib.h>'
+global function calloc(n: usize, size: usize): pointer <cimport, nodecl> end
+global function realloc(p: pointer, size: usize): pointer <cimport, nodecl> end
+global function free(p: pointer): void <cimport, nodecl> end
+
+local Workshop = @record {
+  L: *lua_State,
+  used: usize,
+  limit: usize,
+  error: [2048]cchar
+}
+
+local function allocate(ud: pointer, p: pointer, old: usize, size: usize): pointer
+  local w = (@*Workshop)(ud)
+  local previous: usize = 0
+  if p ~= nilptr then previous = old end
+  if size == 0 then
+    free(p)
+    w.used = w.used - previous
+    return nilptr
+  end
+  if size > w.limit - (w.used - previous) then return nilptr end
+  local result = realloc(p, size)
+  if result ~= nilptr then w.used = w.used - previous + size end
+  return result
+end
+
+local function remember_error(w: *Workshop): void
+  local length: usize = 0
+  local message: cstring = lua_tolstring(w.L, -1, &length)
+  if message == nilptr then message = 'Lua runtime failed'; length = 18 end
+  if length > 2047 then length = 2047 end
+  local bytes = (@*[0]cchar)(message)
+  for i: usize = 0, < length do w.error[i] = bytes[i] end
+  w.error[length] = 0
+end
+
+-- One independent VM per handle. Calls must be serialized by the host.
+global function ws_create(source: cstring): pointer <cexport, codename 'ws_create'>
+  if source == nilptr then return nilptr end
+  local w = (@*Workshop)(calloc(1, #Workshop))
+  if w == nilptr then return nilptr end
+  w.limit = 64 * 1024 * 1024
+  w.L = lua_newstate(allocate, w)
+  if w.L == nilptr then free(w); return nilptr end
+  luaL_openlibs(w.L)
+  local result = luaL_loadstring(w.L, source)
+  if result == 0 then
+    result = lua_pcallk(w.L, 0, 0, 0, 0, nilptr)
+  end
+  if result ~= 0 then remember_error(w) end
+  lua_settop(w.L, 0)
+  return w
+end
+
+-- Returned text belongs to this VM and is valid until its next call or destroy.
+local function protected_call(L: *lua_State): cint
+  local request = (@cstring)(lua_touserdata(L, 1))
+  lua_getglobal(L, 'workshop_call')
+  lua_pushstring(L, request)
+  lua_callk(L, 1, 1, 0, nilptr)
+  return 1
+end
+
+global function ws_call(handle: pointer, request: cstring): cstring <cexport, codename 'ws_call'>
+  local w = (@*Workshop)(handle)
+  if w == nilptr or request == nilptr then return nilptr end
+  lua_settop(w.L, 0)
+  -- Even copying a request may exhaust memory; do it inside a protected C call.
+  lua_pushcclosure(w.L, protected_call, 0)
+  lua_pushlightuserdata(w.L, (@pointer)(request))
+  if lua_pcallk(w.L, 1, 1, 0, 0, nilptr) ~= 0 then
+    remember_error(w)
+    return nilptr
+  end
+  w.error[0] = 0
+  return lua_tolstring(w.L, -1, nilptr)
+end
+
+global function ws_error(handle: pointer): cstring <cexport, codename 'ws_error'>
+  local w = (@*Workshop)(handle)
+  if w == nilptr then return 'Could not allocate workshop VM' end
+  return &w.error[0]
+end
+
+global function ws_memory(handle: pointer): usize <cexport, codename 'ws_memory'>
+  local w = (@*Workshop)(handle)
+  if w == nilptr then return 0 end
+  return w.used
+end
+
+global function ws_destroy(handle: pointer): void <cexport, codename 'ws_destroy'>
+  local w = (@*Workshop)(handle)
+  if w == nilptr then return end
+  lua_close(w.L)
+  free(w)
+end
+
+-- World-space box geometry, shared by picking/rendering adapters. Angle is radians.
+global function ws_box_vertex(index: cint, x: float32, y: float32, z: float32,
+  width: float32, height: float32, depth: float32, angle: float32,
+  ox: *float32, oy: *float32, oz: *float32): void <cexport, codename 'ws_box_vertex'>
+  local dx: float32 = -width * 0.5
+  local dy: float32 = -height * 0.5
+  local dz: float32 = -depth * 0.5
+  if index % 2 == 1 then dx = -dx end
+  if index // 2 % 2 == 1 then dy = -dy end
+  if index // 4 % 2 == 1 then dz = -dz end
+  local c: float32 = math.cos(angle)
+  local s: float32 = math.sin(angle)
+  $ox = x + dx*c - dz*s
+  $oy = y + dy
+  $oz = z + dx*s + dz*c
+end

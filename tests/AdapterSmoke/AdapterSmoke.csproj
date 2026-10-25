@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/XivWorkshop/Backend.cs" Link="Backend.cs" />
+    <Compile Include="../../src/XivWorkshop/Models.cs" Link="Models.cs" />
+    <Compile Include="../../src/XivWorkshop/SceneStore.cs" Link="SceneStore.cs" />
+  </ItemGroup>
+</Project>

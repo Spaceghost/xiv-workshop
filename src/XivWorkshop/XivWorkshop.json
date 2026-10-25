@@ -1,0 +1,14 @@
+{
+  "Author": "Spaceghost",
+  "Name": "XIV Workshop",
+  "Punchline": "Editable interfaces and programmable world objects, with Lua and visual wiring.",
+  "Description": "Create panels, labels, buttons, world orbs and cubes. Edit their properties, connect behavior nodes, and attach Lua scripts. Open with /workshop.",
+  "InternalName": "XivWorkshop",
+  "AssemblyVersion": "0.1.0.0",
+  "DalamudApiLevel": 15,
+  "ApplicableVersion": "any",
+  "Tags": ["workshop", "lua", "objects", "ui"],
+  "LoadRequiredState": 0,
+  "LoadSync": false,
+  "CanUnloadAsync": false
+}

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "name": "First workshop",
+  "objects": [
+    {"id":"panel1","kind":"panel","label":"","x":55,"y":100,"width":285,"height":225,"color":[0.09,0.11,0.17,0.94]},
+    {"id":"label1","kind":"label","label":"My first workshop","x":70,"y":125,"width":255,"height":45,"color":[0.65,0.83,1,1]},
+    {"id":"button1","kind":"button","label":"Make the orb glow","x":85,"y":200,"width":225,"height":65,"color":[0.2,0.43,0.7,1]},
+    {"id":"orb1","kind":"orb","label":"Orb","x":0,"y":1,"z":0,"width":1,"height":1,"depth":1,"territory":0,"color":[0.4,0.7,1,1]},
+    {"id":"cube1","kind":"cube","label":"Cube","x":2,"y":1,"z":0,"width":1,"height":1,"depth":1,"territory":0,"color":[0.6,0.9,0.7,1]}
+  ],
+  "nodes": [
+    {"id":"click","type":"event","object":"button1","event":"click","x":35,"y":35},
+    {"id":"color","type":"set","object":"orb1","property":"color","value":[1,0.4,0.7,1],"x":310,"y":35},
+    {"id":"lift","type":"script","object":"orb1","code":"self:animate(\"y\", self:get(\"y\") + 0.7, 0.8)\nlog(\"The wire changed my color; Lua moved me.\")","x":585,"y":35},
+    {"id":"tick","type":"event","object":"cube1","event":"tick","x":35,"y":170},
+    {"id":"spin","type":"script","object":"cube1","code":"self:set(\"rotation\", time * 0.5)","x":310,"y":170}
+  ],
+  "links": [
+    {"from":"click","to":"color"},
+    {"from":"color","to":"lift"},
+    {"from":"tick","to":"spin"}
+  ]
+}

@@ -1,0 +1,22 @@
+-- Lua 5.4 C ABI. Runtime policy is in lua/workshop.lua.
+## cinclude '<lua.h>'
+## cinclude '<lauxlib.h>'
+## cinclude '<lualib.h>'
+## linklib 'lua'
+
+global lua_State <cimport, nodecl> = @record{}
+global lua_Alloc = @function(ud: pointer, ptr: pointer, osize: usize, nsize: usize): pointer
+global lua_CFunction = @function(L: *lua_State): cint
+global function lua_newstate(f: lua_Alloc, ud: pointer): *lua_State <cimport, nodecl> end
+global function lua_close(L: *lua_State): void <cimport, nodecl> end
+global function luaL_openlibs(L: *lua_State): void <cimport, nodecl> end
+global function luaL_loadstring(L: *lua_State, source: cstring): cint <cimport, nodecl> end
+global function lua_getglobal(L: *lua_State, name: cstring): cint <cimport, nodecl> end
+global function lua_settop(L: *lua_State, idx: cint): void <cimport, nodecl> end
+global function lua_pushstring(L: *lua_State, value: cstring): cstring <cimport, nodecl> end
+global function lua_pushlightuserdata(L: *lua_State, value: pointer): void <cimport, nodecl> end
+global function lua_touserdata(L: *lua_State, index: cint): pointer <cimport, nodecl> end
+global function lua_pushcclosure(L: *lua_State, f: lua_CFunction, n: cint): void <cimport, nodecl> end
+global function lua_callk(L: *lua_State, nargs: cint, nresults: cint, ctx: isize, k: pointer): void <cimport, nodecl> end
+global function lua_tolstring(L: *lua_State, idx: cint, length: *usize): cstring <cimport, nodecl> end
+global function lua_pcallk(L: *lua_State, nargs: cint, nresults: cint, errfunc: cint, ctx: isize, k: pointer): cint <cimport, nodecl> end
