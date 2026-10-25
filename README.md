@@ -58,6 +58,7 @@ checkout's pinned compiler and Lua source without changing that checkout.
 tools/build.sh all
 tools/test.sh
 tools/ui-test.sh
+tools/windows-test.sh
 python3 tools/install.py --register
 ```
 
@@ -65,6 +66,10 @@ For a standalone checkout, run `tools/bootstrap.sh windows` first and set `ZIG`
 to an installed Zig executable. This fetches the compiler and checksum-verified
 Lua source using `toolchain.env`; it does not install .NET, Zig, or Dalamud.
 Set `DALAMUD_HOME` if references are outside `~/.xlcore/dalamud/Hooks/dev`.
+
+The Windows test also needs `xvfb-run` and XIVLauncher's installed Wine/Windows
+.NET runtime. Set `WINE` and `WINDOWS_DOTNET` if they are elsewhere. It uses its
+own Wine prefix under `build/`, leaving the game prefix alone.
 
 The installer stages into `~/dalamud-plugins/XivWorkshop` and can register that
 path in `~/.xlcore/dalamudConfig.json` while the game is closed. It backs up an

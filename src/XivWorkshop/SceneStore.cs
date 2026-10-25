@@ -8,8 +8,9 @@ public static class SceneStore
     // Write beside the destination, so replacement stays on the same filesystem.
     public static void Save(Backend backend, string path)
     {
-        var revision = backend.State.Revision;
-        var text = JsonSerializer.Serialize(backend.Scene, new JsonSerializerOptions(Backend.Json) { WriteIndented = true });
+        var state = backend.State;
+        var revision = state.Revision;
+        var text = JsonSerializer.Serialize(state.Scene, new JsonSerializerOptions(Backend.Json) { WriteIndented = true });
         var full = Path.GetFullPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         var temp = full + "." + Guid.NewGuid().ToString("N") + ".tmp";

@@ -3,7 +3,8 @@ using System.Text.Json;
 using XivWorkshop;
 
 var root = Path.GetFullPath(args[0]);
-using var runtime = new Backend(Path.Combine(root, "build/native/libxiv_workshop.so"),
+var library = Path.Combine(root, OperatingSystem.IsWindows() ? "build/plugin/xiv_workshop.dll" : "build/native/libxiv_workshop.so");
+using var runtime = new Backend(library,
     Path.Combine(root, "build/plugin/lua/workshop.lua"));
 void Check(bool passed, string message)
 {
@@ -44,3 +45,19 @@ try
     Check(Math.Abs(vertex.X - (cube.X + .5f)) < .001f, "managed renderer calls compiled Nelua geometry");
 }
 finally { Directory.Delete(temp, recursive: true); }
+
+using (var concurrent = new Backend(library, Path.Combine(root, "build/plugin/lua/workshop.lua")))
+{
+    Parallel.For(0, 32, _ => concurrent.Send(new { op = "add", kind = "label" }));
+    Check(concurrent.Scene.Objects.Count == 32, "concurrent host calls preserve every authored edit");
+    concurrent.Dispose();
+    try { concurrent.Send(new { op = "snapshot" }); throw new Exception("Disposed VM accepted a call"); }
+    catch (ObjectDisposedException) { }
+    Check(true, "disposed native handles reject further calls");
+}
+for (var i = 0; i < 8; i++)
+{
+    using var reload = new Backend(library, Path.Combine(root, "build/plugin/lua/workshop.lua"));
+    if (reload.Scene.Objects.Count != 0) throw new Exception("Reload retained an old scene");
+}
+Check(true, "repeated native load and unload creates clean independent VMs");

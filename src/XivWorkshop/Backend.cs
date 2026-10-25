@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace XivWorkshop;
 
-/// <summary>Owns a native Nelua module and one Lua VM. Use on the UI thread only.</summary>
+/// <summary>Owns a native Nelua module and one Lua VM; serializes native calls and disposal.</summary>
 public sealed class Backend : IDisposable
 {
     public static readonly JsonSerializerOptions Json = new()
@@ -29,6 +29,7 @@ public sealed class Backend : IDisposable
 
     private nint library;
     private nint vm;
+    private readonly object gate = new();
     private readonly Call call = null!;
     private readonly Error error = null!;
     private readonly Destroy destroy = null!;
@@ -60,16 +61,20 @@ public sealed class Backend : IDisposable
 
     public Snapshot Send(object request)
     {
-        ObjectDisposedException.ThrowIf(vm == 0, this);
-        var pointer = call(vm, JsonSerializer.Serialize(request, Json));
-        if (pointer == 0)
-            throw new InvalidOperationException(Marshal.PtrToStringUTF8(error(vm)) ?? "Native call failed");
-        var next = JsonSerializer.Deserialize<Snapshot>(Marshal.PtrToStringUTF8(pointer)!, Json)
-            ?? throw new InvalidOperationException("Empty response from Lua runtime");
-        if (!next.Ok) throw new InvalidOperationException(next.Error ?? "Workshop command failed");
-        next.Scene ??= State.Scene;
-        State = next;
-        return next;
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(vm == 0, this);
+            var pointer = call(vm, JsonSerializer.Serialize(request, Json));
+            if (pointer == 0)
+                throw new InvalidOperationException(Marshal.PtrToStringUTF8(error(vm)) ?? "Native call failed");
+            // This string belongs to Lua and survives only until the next native call.
+            var next = JsonSerializer.Deserialize<Snapshot>(Marshal.PtrToStringUTF8(pointer)!, Json)
+                ?? throw new InvalidOperationException("Empty response from Lua runtime");
+            if (!next.Ok) throw new InvalidOperationException(next.Error ?? "Workshop command failed");
+            next.Scene ??= State.Scene;
+            State = next;
+            return next;
+        }
     }
 
     public void Edit(string id, Dictionary<string, object> patch, string? group = null) =>
@@ -77,14 +82,21 @@ public sealed class Backend : IDisposable
 
     public Vector3 BoxVertex(SceneObject o, int index)
     {
-        vertex(index, o.X, o.Y, o.Z, o.Width, o.Height, o.Depth, o.Rotation,
-            out var x, out var y, out var z);
-        return new(x, y, z);
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(vm == 0, this);
+            vertex(index, o.X, o.Y, o.Z, o.Width, o.Height, o.Depth, o.Rotation,
+                out var x, out var y, out var z);
+            return new(x, y, z);
+        }
     }
 
     public void Dispose()
     {
-        if (vm != 0) { destroy(vm); vm = 0; }
-        if (library != 0) { NativeLibrary.Free(library); library = 0; }
+        lock (gate)
+        {
+            if (vm != 0) { destroy(vm); vm = 0; }
+            if (library != 0) { NativeLibrary.Free(library); library = 0; }
+        }
     }
 }
