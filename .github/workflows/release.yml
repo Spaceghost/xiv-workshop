@@ -1,0 +1,99 @@
+# On a v* tag (or by hand, to test the build without publishing): build XivWorkshop on a
+# GitHub-hosted runner, test it, and publish latest.zip as the GitHub Release.
+#
+#   v0.1.0          stable: .../releases/latest/download/latest.zip
+#   v0.1.1-test.1   prerelease, not marked latest
+#
+# Dalamud references come from goatcorp's public distribution; Zig, Nelua and the Lua
+# source are the versions pinned in toolchain.env.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'Spaceghost/xiv-workshop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      DALAMUD_HOME: ${{ github.workspace }}/.dalamud
+      DOTNET: dotnet
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Zig
+        run: |
+          set -euo pipefail
+          source toolchain.env
+          dir="$HOME/.local/opt/zig-x86_64-linux-$ZIG_VERSION"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 "https://ziglang.org/download/$ZIG_VERSION/zig-x86_64-linux-$ZIG_VERSION.tar.xz" |
+            tar -xJ --strip-components=1 -C "$dir"
+          "$dir/zig" version
+
+      - name: Nelua and Lua
+        run: tools/bootstrap.sh windows
+
+      - name: Dalamud reference assemblies
+        run: |
+          set -euo pipefail
+          mkdir -p "$DALAMUD_HOME"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/dalamud.zip" https://goatcorp.github.io/dalamud-distrib/latest.zip
+          unzip -q -o "$RUNNER_TEMP/dalamud.zip" -d "$DALAMUD_HOME"
+          test -f "$DALAMUD_HOME/Dalamud.dll"
+
+      - name: Test
+        run: tools/test.sh
+
+      - name: Build
+        run: tools/build.sh windows
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          [[ "$GITHUB_REF_TYPE" == tag ]] || tag="v$(python3 -c 'import json; print(json.load(open("src/XivWorkshop/XivWorkshop.json"))["AssemblyVersion"])')-ci"
+          tools/package.py "$tag"
+          cd release && sha256sum -- * >SHA256SUMS && cat SHA256SUMS
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: xivworkshop-${{ github.ref_name }}
+          path: release
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish the release for this tag
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          kind=(--latest)
+          [[ "$TAG" == *-* ]] && kind=(--prerelease --latest=false)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+          else
+            gh release create "$TAG" release/* --verify-tag --title "XIV Workshop $TAG" --generate-notes "${kind[@]}"
+          fi
